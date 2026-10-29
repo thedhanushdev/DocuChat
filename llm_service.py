@@ -2,16 +2,34 @@
 import os
 import re
 
+import streamlit as st
 from dotenv import load_dotenv
 from groq import Groq
 from openai import OpenAI
 from google import genai
 
+# Load local .env settings when running on your computer.
 load_dotenv()
 
 
+def get_setting(name: str, default=None):
+    """
+    Read configuration from local environment variables first,
+    then from Streamlit Cloud Secrets.
+    """
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    try:
+        return st.secrets.get(name, default)
+    except Exception:
+        return default
+
+
 def quick_answer(question: str, passages: list[dict]) -> str:
-    """Extract a basic answer locally as the final fallback."""
+    """Extract relevant sentences locally without an AI API."""
 
     if not passages:
         return "I couldn't find relevant information in this PDF."
@@ -21,23 +39,24 @@ def quick_answer(question: str, passages: list[dict]) -> str:
         "the", "is", "are", "was", "were", "a", "an", "and",
         "or", "of", "to", "in", "on", "for", "with", "does",
         "do", "can", "could", "explain", "tell", "me", "about",
-        "please", "describe", "define", "give", "show"
+        "please", "describe", "define", "give", "show", "from",
+        "this", "that", "it", "its", "be", "by", "as"
     }
 
-    def words(text):
+    def words(text: str) -> set[str]:
         return set(re.findall(r"\b[a-zA-Z0-9]+\b", text.lower()))
 
     question_words = words(question) - stop_words
     candidates = []
 
     for passage in passages:
-        sentences = re.split(
-            r"(?<=[.!?])\s+",
-            passage.get("text", "").strip()
-        )
+        text = passage.get("text", "")
+
+        sentences = re.split(r"(?<=[.!?])\s+", text.strip())
 
         for sentence in sentences:
             sentence = sentence.strip()
+
             if not sentence:
                 continue
 
@@ -46,7 +65,8 @@ def quick_answer(question: str, passages: list[dict]) -> str:
 
             relevance = (
                 overlap / len(question_words)
-                if question_words else 0
+                if question_words
+                else 0
             )
 
             candidates.append({
@@ -62,7 +82,7 @@ def quick_answer(question: str, passages: list[dict]) -> str:
             item["relevance"],
             item["passage_score"],
         ),
-        reverse=True
+        reverse=True,
     )
 
     selected = [
@@ -77,31 +97,33 @@ def quick_answer(question: str, passages: list[dict]) -> str:
         )
 
     best = passages[0]
+
     return (
-        "The local fallback could not determine an exact answer. "
-        f"Here is the closest retrieved passage (page {best.get('page', '?')}):\n\n"
+        "I couldn't determine an exact answer using local extraction. "
+        f"The closest retrieved passage is from page "
+        f"{best.get('page', '?')}:\n\n"
         f"{best.get('text', '')}"
     )
 
 
 def _build_prompt(question: str, passages: list[dict]) -> str:
-    """Build a question-answering prompt from retrieved PDF passages."""
+    """Build a grounded question-answering prompt."""
 
     context = "\n\n".join(
         f"[Page {item.get('page', '?')}] {item.get('text', '')}"
         for item in passages[:4]
     )
 
-    return f"""Answer the user's question using the PDF passages below.
+    return f"""Answer the user's question using only the PDF passages below.
 
 Instructions:
 - Answer the exact question directly and clearly.
-- Understand the meaning of the question; do not just match keywords.
-- Use only information supported by the passages.
-- Do not invent facts or claim information the PDF does not contain.
+- Understand the meaning of the question, not just matching keywords.
+- Use only information supported by the provided passages.
+- Never invent facts.
 - Include page references when possible.
 - If the passages do not contain the answer, say so.
-- Use a concise answer unless more explanation is needed.
+- Be concise but explain important points when needed.
 
 PDF passages:
 {context}
@@ -111,25 +133,35 @@ Question: {question}
 Answer:"""
 
 
-def _error_summary(provider: str, exc: Exception, api_key: str) -> str:
-    """Return a short diagnostic without exposing the API key."""
+def _error_summary(
+    provider: str,
+    exc: Exception,
+    api_key: str = "",
+) -> str:
+    """Create a short diagnostic without revealing the API key."""
 
     message = str(exc)
+
     if api_key:
         message = message.replace(api_key, "[hidden]")
 
-    # Keep diagnostics short.
     message = " ".join(message.split())[:220]
+
     return f"{provider}: {type(exc).__name__}: {message}"
 
 
 def answer_question(
     question: str,
-    passages: list[dict]
+    passages: list[dict],
 ) -> str:
     """
-    Try Groq, then OpenAI, then Gemini.
-    Use the local PDF answer only if all providers fail.
+    Provider priority:
+    1. Groq
+    2. OpenAI
+    3. Gemini
+    4. Local extraction
+
+    The first successful AI provider returns the answer immediately.
     """
 
     if not passages:
@@ -138,8 +170,10 @@ def answer_question(
     prompt = _build_prompt(question, passages)
     failures = []
 
-    # 1. GROQ — primary provider
-    api_key = os.getenv("GROQ_API_KEY")
+    # --------------------------------------------------
+    # 1. GROQ — PRIMARY PROVIDER
+    # --------------------------------------------------
+    api_key = get_setting("GROQ_API_KEY")
 
     if api_key:
         try:
@@ -150,20 +184,23 @@ def answer_question(
             )
 
             response = client.chat.completions.create(
-                model=os.getenv(
+                model=get_setting(
                     "GROQ_MODEL",
-                    "openai/gpt-oss-20b"
+                    "openai/gpt-oss-20b",
                 ),
                 messages=[
                     {
                         "role": "system",
                         "content": (
                             "You are a precise PDF question-answering "
-                            "assistant. Ground every answer in the "
+                            "assistant. Base every answer on the "
                             "provided document passages."
                         ),
                     },
-                    {"role": "user", "content": prompt},
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
                 ],
                 max_tokens=500,
             )
@@ -176,12 +213,16 @@ def answer_question(
             failures.append("Groq returned an empty answer.")
 
         except Exception as exc:
-            failures.append(_error_summary("Groq", exc, api_key))
+            failures.append(
+                _error_summary("Groq", exc, api_key)
+            )
     else:
-        failures.append("Groq skipped: GROQ_API_KEY is missing.")
+        failures.append("Groq skipped: API key is missing.")
 
-    # 2. OPENAI — first fallback
-    api_key = os.getenv("OPENAI_API_KEY")
+    # --------------------------------------------------
+    # 2. OPENAI — FIRST FALLBACK
+    # --------------------------------------------------
+    api_key = get_setting("OPENAI_API_KEY")
 
     if api_key:
         try:
@@ -192,17 +233,23 @@ def answer_question(
             )
 
             response = client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                model=get_setting(
+                    "OPENAI_MODEL",
+                    "gpt-4o-mini",
+                ),
                 messages=[
                     {
                         "role": "system",
                         "content": (
                             "You are a precise PDF question-answering "
-                            "assistant. Ground every answer in the "
+                            "assistant. Base every answer on the "
                             "provided document passages."
                         ),
                     },
-                    {"role": "user", "content": prompt},
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
                 ],
                 max_tokens=500,
             )
@@ -215,12 +262,16 @@ def answer_question(
             failures.append("OpenAI returned an empty answer.")
 
         except Exception as exc:
-            failures.append(_error_summary("OpenAI", exc, api_key))
+            failures.append(
+                _error_summary("OpenAI", exc, api_key)
+            )
     else:
-        failures.append("OpenAI skipped: OPENAI_API_KEY is missing.")
+        failures.append("OpenAI skipped: API key is missing.")
 
-    # 3. GEMINI — second fallback
-    api_key = os.getenv("GEMINI_API_KEY")
+    # --------------------------------------------------
+    # 3. GEMINI — SECOND FALLBACK
+    # --------------------------------------------------
+    api_key = get_setting("GEMINI_API_KEY")
 
     if api_key:
         try:
@@ -230,9 +281,9 @@ def answer_question(
             )
 
             response = client.models.generate_content(
-                model=os.getenv(
+                model=get_setting(
                     "GEMINI_MODEL",
-                    "gemini-2.5-flash"
+                    "gemini-2.5-flash",
                 ),
                 contents=prompt,
                 config={"max_output_tokens": 500},
@@ -246,17 +297,22 @@ def answer_question(
             failures.append("Gemini returned an empty answer.")
 
         except Exception as exc:
-            failures.append(_error_summary("Gemini", exc, api_key))
+            failures.append(
+                _error_summary("Gemini", exc, api_key)
+            )
     else:
-        failures.append("Gemini skipped: GEMINI_API_KEY is missing.")
+        failures.append("Gemini skipped: API key is missing.")
 
-    # 4. FINAL FALLBACK — local extraction
+    # --------------------------------------------------
+    # 4. LOCAL FALLBACK — NO AI API REQUIRED
+    # --------------------------------------------------
     local_result = quick_answer(question, passages)
 
     return (
         f"{local_result}\n\n"
         "---\n"
-        "**Local fallback used:** All AI providers failed.\n\n"
+        "**Local fallback used:** All configured AI providers "
+        "failed or were unavailable.\n\n"
         "**Provider diagnostics:**\n"
         + "\n".join(f"- {failure}" for failure in failures)
     )
