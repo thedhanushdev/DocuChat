@@ -1,161 +1,382 @@
-# 📚 DocuChat — Talk to Any PDF
 
-An AI-powered PDF question-answering application that allows users to upload a PDF document and ask questions about its content using natural language. DocuChat retrieves relevant passages using semantic search and generates answers with the Google Gemini API.
+# 📄 DocuChat — Talk to Any PDF
 
-## ✨ Features
+**DocuChat** is an AI-powered web application that allows users to upload PDF documents and ask questions about their content using natural language. It retrieves relevant information from the document and generates answers using AI models, with a local fallback when AI services are unavailable.
 
-- 📄 Upload and process PDF documents.
-- 🔍 Extract text from PDFs using PyMuPDF.
-- ✂️ Split document text into smaller, overlapping chunks.
-- 🧠 Generate semantic embeddings using Sentence Transformers.
-- ⚡ Search relevant passages using FAISS.
-- 🤖 Generate contextual answers using Google Gemini.
-- 📑 Display source passages and PDF page numbers.
-- 💬 Ask multiple questions in an interactive Streamlit interface.
+Built with Python, Streamlit, Sentence Transformers, FAISS, and multiple AI providers.
+
+## 🚀 Features
+
+- 📤 **PDF Upload:** Upload a PDF document and extract its text.
+- 💬 **Chat with PDF:** Ask questions about the uploaded document.
+- 🔍 **Semantic Search:** Find relevant document passages using vector embeddings.
+- 🤖 **Multiple AI Providers:** Supports Groq, OpenAI, and Google Gemini.
+- 🔄 **Automatic Fallback:** Tries available AI providers before falling back to local sentence extraction.
+- 📚 **Source Exploration:** Explore document content and relevant extracted passages.
+- 📊 **Document Overview:** View extracted document information and page details.
+- ☁️ **Cloud Deployment:** Deploy the application using Streamlit Community Cloud.
 
 ## 🛠️ Tech Stack
 
 | Technology | Purpose |
 |---|---|
-| Python | Core programming language |
-| Streamlit | Interactive web interface |
+| Python | Core application logic |
+| Streamlit | Web interface |
 | PyMuPDF | PDF text extraction |
 | Sentence Transformers | Text embeddings |
-| FAISS | Similarity search |
-| Google Gemini API | AI-generated answers |
-| python-dotenv | Environment variable management |
-| pytest | Testing |
+| FAISS | Vector similarity search |
+| Groq API | Primary AI answer provider |
+| OpenAI API | Secondary AI provider |
+| Google Gemini API | Additional AI provider |
+| python-dotenv | Local environment variable management |
+| Git and GitHub | Version control and source hosting |
+| Streamlit Community Cloud | Application deployment |
 
-## 🏗️ How It Works
+## 🏗️ Project Architecture
 
-1. **Upload PDF:** The user uploads a PDF document.
-2. **Extract Text:** PyMuPDF extracts selectable text from the document.
-3. **Chunk Text:** The extracted content is divided into overlapping chunks.
-4. **Create Embeddings:** Sentence Transformers converts text chunks into numerical vectors.
-5. **Index Content:** FAISS creates a searchable vector index.
-6. **Retrieve Context:** The user's question is matched against relevant document passages.
-7. **Generate Answer:** Google Gemini generates an answer based on the retrieved passages.
-8. **Show Sources:** The application displays relevant passages and their page numbers.
+```text
+                   ┌──────────────────────┐
+                   │        User          │
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │   Streamlit UI        │
+                   │       app.py          │
+                   └──────────┬───────────┘
+                              │
+                    Upload PDF / Ask Question
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │    PDF Processor      │
+                   │   pdf_processor.py    │
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │    Text Chunking      │
+                   │     chunking.py       │
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │ Embeddings and FAISS │
+                   │   vector_store.py     │
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │ Relevant Text Chunks │
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │    LLM Service        │
+                   │   llm_service.py      │
+                   └──────────┬───────────┘
+                              │
+              ┌───────────────┼────────────────┐
+              ▼               ▼                ▼
+          Groq API        OpenAI API      Gemini API
+              └───────────────┼────────────────┘
+                              │
+                    If AI providers fail
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │ Local Answer Fallback│
+                   └──────────┬───────────┘
+                              │
+                              ▼
+                   ┌──────────────────────┐
+                   │ Answer in Streamlit  │
+                   └──────────────────────┘
+```
 
-## 📂 Project Structure
+## 📁 Project Structure
 
 ```text
 DocuChat/
+│
 ├── app.py
 ├── pdf_processor.py
 ├── chunking.py
 ├── vector_store.py
 ├── llm_service.py
+├── requirements.txt
 ├── pyproject.toml
+├── README.md
 ├── .gitignore
-├── .env
+├── .env                  # Local secrets; do not commit
 └── tests/
     └── test_pdf_processor.py
 ```
 
-**Note:** `.env`, `.venv`, `build/`, and `docuchat.egg-info/` are local environment or generated files. They should not be committed to GitHub. The `.env` file stores your API key and should remain private.
+## ⚙️ How It Works
 
-## ⚙️ Installation and Setup
+### 1. Upload a PDF
+
+The user uploads a PDF through the Streamlit interface.
+
+### 2. Extract Text
+
+`pdf_processor.py` uses PyMuPDF to extract selectable text from the PDF, page by page.
+
+### 3. Split Text into Chunks
+
+`chunking.py` divides the extracted text into smaller sections so that relevant information can be retrieved efficiently.
+
+### 4. Generate Embeddings
+
+`vector_store.py` uses the Sentence Transformers model `all-MiniLM-L6-v2` to convert text chunks into numerical vector representations.
+
+### 5. Search Relevant Information
+
+FAISS searches the vector representations to retrieve text chunks related to the user's question.
+
+### 6. Generate an Answer
+
+`llm_service.py` attempts to answer the question using the configured AI providers in this order:
+
+1. Groq
+2. OpenAI
+3. Google Gemini
+4. Local sentence extraction fallback
+
+The answer quality and availability depend on the configured provider, model, API key, and retrieved document content.
+
+## 🧠 Understanding RAG
+
+DocuChat follows a Retrieval-Augmented Generation (RAG) workflow.
+
+RAG combines two processes:
+
+- **Retrieval:** Finds relevant information from the uploaded document.
+- **Generation:** Uses an AI model to formulate an answer based on the retrieved information.
+
+This helps the application answer questions about the user's PDF instead of relying only on the AI model's general knowledge.
+
+## 💻 Run Locally on Windows
 
 ### Prerequisites
 
-- Python 3.11, 3.12, or 3.13
+Install the following:
+
+- Python 3.11 or another Python version supported by the project's dependencies
 - Git
-- A Google Gemini API key
+- Visual Studio Code
+- API keys for whichever AI providers you want to use
 
-### 1. Clone the repository
+### Step 1: Clone the Repository
 
-```bash
+Open PowerShell in VS Code:
+
+```powershell
 git clone https://github.com/thedhanushdev/DocuChat.git
 cd DocuChat
 ```
 
-### 2. Create a virtual environment
+If the project is already on your computer, open its existing folder instead.
 
-**Windows PowerShell:**
+### Step 2: Create a Virtual Environment
 
 ```powershell
-py -3.13 -m venv .venv
+python -m venv .venv
+```
+
+Activate it:
+
+```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks activation, run:
+If PowerShell blocks activation, use Command Prompt or configure the appropriate execution policy for your environment.
+
+### Step 3: Install Dependencies
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### 3. Install dependencies
+### Step 4: Configure Environment Variables
 
-```bash
-python -m pip install .
-```
+Create a file named `.env` in the project root.
 
-### 4. Configure environment variables
-
-Create a `.env` file in the project root:
+Add only the keys and model IDs you have verified for your provider accounts:
 
 ```dotenv
-GEMINI_API_KEY=your_actual_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=your_verified_groq_model
+
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=your_verified_openai_model
+
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=your_verified_gemini_model
 ```
 
-Replace the placeholder with your own Gemini API key. Never publish this key or commit the `.env` file.
+Replace the placeholder values with your own credentials. Do not publish this file or commit it to GitHub.
 
-### 5. Run the application
+### Step 5: Start the Application
 
-```bash
-python -m streamlit run app.py
+```powershell
+streamlit run app.py
 ```
 
-Open the local URL displayed in the terminal, usually:
+Streamlit will display a local URL in the terminal. Open that URL in your browser.
 
-`http://localhost:8501`
+### Step 6: Test the Application
 
-## 🧪 Run Tests
+1. Upload a text-based PDF.
+2. Wait for processing to finish.
+3. Ask a question that can be answered from the document.
+4. Review the answer and the available source information.
+5. Test the local fallback by temporarily disabling AI credentials in a safe local test environment.
 
-Install pytest if it isn't already installed:
+## 🔐 Environment Variables and API Keys
 
-```bash
-python -m pip install pytest
+DocuChat supports configuration through environment variables and Streamlit Community Cloud Secrets.
+
+Never store real API keys in source code.
+
+The `.env` file should remain local and be excluded through `.gitignore`. If a key has been exposed, revoke it and create a replacement.
+
+## ☁️ Deploy on Streamlit Community Cloud
+
+### Step 1: Push the Project to GitHub
+
+Make sure the project contains the application files, `requirements.txt`, and the updated `README.md`.
+
+Check your changes:
+
+```powershell
+git status
 ```
 
-Run the tests:
+Stage and push the required files:
 
-```bash
-python -m pytest -q
+```powershell
+git add README.md app.py llm_service.py requirements.txt pyproject.toml .gitignore
+git commit -m "Update DocuChat documentation and application"
+git push origin main
 ```
 
-## ⚠️ Current Limitations
+Review staged changes before committing. Never stage or push `.env` or other files containing secrets.
 
-- The current implementation processes one uploaded PDF at a time.
-- Scanned PDFs without selectable text require OCR, which is not currently implemented.
-- Answers depend on the relevance of retrieved passages and the availability of the Gemini API.
-- The vector index is stored in application memory and is rebuilt when a new PDF is processed.
+### Step 2: Open Streamlit Community Cloud
 
-## 🚀 Future Enhancements
+Visit:
 
-- OCR support for scanned PDFs.
-- Chat with multiple PDF documents.
-- Persistent vector storage.
-- Conversation export and download.
-- Improved retrieval and answer evaluation.
-- Cloud deployment.
+https://share.streamlit.io/
 
-## 🔐 Security
+Sign in using your GitHub account.
 
-- Keep API keys in environment variables.
-- Never commit `.env` or other files containing secrets.
-- Do not upload confidential documents to an untrusted deployment.
-- Review retrieved document content as untrusted data.
+### Step 3: Create the App
 
-## 👨‍💻 Author
+Select **Create app** and configure:
 
-**Dhanush Kannam**
+- **Repository:** `thedhanushdev/DocuChat`
+- **Branch:** `main`
+- **Main file path:** `app.py`
 
-GitHub: [@thedhanushdev](https://github.com/thedhanushdev)
+Choose a Python version supported by your dependencies.
+
+### Step 4: Add Secrets
+
+Open the application's settings and locate the Secrets section.
+
+Use TOML format with your actual replacement API keys and verified model IDs:
+
+```toml
+GROQ_API_KEY = "your_groq_api_key"
+GROQ_MODEL = "your_verified_groq_model"
+
+OPENAI_API_KEY = "your_openai_api_key"
+OPENAI_MODEL = "your_verified_openai_model"
+
+GEMINI_API_KEY = "your_gemini_api_key"
+GEMINI_MODEL = "your_verified_gemini_model"
+```
+
+Save the settings. Keep these values private.
+
+### Step 5: Deploy and Test
+
+1. Deploy the application.
+2. Check the deployment logs if installation fails.
+3. Open the deployed URL.
+4. Upload a sample PDF.
+5. Ask a question and verify that the answer is relevant.
+6. Check the logs if AI providers return errors.
+
+A push to the connected GitHub branch normally triggers a redeployment. Changes to Secrets may require the app to restart or rerun.
+
+## 🧩 Important Modules
+
+| File | Responsibility |
+|---|---|
+| `app.py` | Streamlit UI, upload flow, chat, and document views |
+| `pdf_processor.py` | PDF loading and text extraction |
+| `chunking.py` | Text segmentation |
+| `vector_store.py` | Embedding generation and FAISS search |
+| `llm_service.py` | AI provider calls and local fallback |
+| `requirements.txt` | Python package dependencies |
+| `pyproject.toml` | Project metadata and build configuration |
+| `tests/` | Automated tests |
+
+## ⚠️ Limitations
+
+- **Scanned PDFs:** The current text-extraction workflow may not read image-only pages because OCR is not yet implemented.
+- **Answer accuracy:** AI answers depend on the quality of extracted text, retrieved chunks, and the selected model.
+- **Local fallback:** Sentence extraction is a basic fallback, not a full generative AI model.
+- **Citations:** Reliable page-level citations depend on preserving page metadata through chunking and retrieval. Verify which citation features are currently implemented in the application.
+- **Deployment resources:** Embedding models and FAISS may require additional memory and installation time in the cloud.
+- **Provider availability:** API quotas, billing, model availability, and network errors may affect responses.
+
+## 🔮 Future Improvements
+
+- Add OCR support for scanned PDFs using Tesseract or another OCR service.
+- Improve page-level citations and show supporting text excerpts.
+- Add clickable source-page navigation where supported by the PDF viewer.
+- Improve chunking, retrieval ranking, and answer evaluation.
+- Add chat history and support for multiple documents.
+- Add automated tests for chunking, retrieval, and AI fallback behavior.
+- Improve loading indicators, error messages, and deployment diagnostics.
+- Add configurable privacy controls and document-processing limits.
+
+## 🧪 Testing
+
+Run the available tests from the project root:
+
+```powershell
+python -m pytest
+```
+
+If pytest is not installed:
+
+```powershell
+pip install pytest
+```
+
+## 🔒 Security and Privacy
+
+- Never commit API keys, access tokens, or private credentials.
+- Keep `.env` in `.gitignore`.
+- Store cloud API keys in Streamlit Secrets.
+- Revoke and rotate any credential accidentally exposed.
+- Avoid uploading confidential documents unless the deployment's privacy and data-handling requirements are acceptable.
+- Apply appropriate limits to document size and processing resources before public deployment.
+
+## 📌 Project Summary
+
+**DocuChat — Talk to Any PDF** demonstrates how PDF text extraction, semantic search, vector databases, and AI language models can be combined to create a document question-answering application.
+
+It is a practical project for exploring Python, Streamlit, embeddings, FAISS, API integration, fallback handling, and cloud deployment.
 
 ---
 
-*DocuChat — making PDF documents easier to understand through AI.*
+## 📄 License
+
+No license is specified here. Add a `LICENSE` file if you want to publish the project under a particular open-source license.
