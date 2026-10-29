@@ -1,5 +1,0 @@
-app
-chunking
-llm_service
-pdf_processor
-vector_store
