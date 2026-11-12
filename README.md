@@ -5,8 +5,8 @@ DocuChat was developed collaboratively by a team of five members, with contribut
 
 | S. No. | Team Member | Role & Contributions |
 |---|---|---|
-| 1 | LEBAKA ADINARAYANA ACHARI | PDF Processing – PDF upload, text extraction, and document handling using PyMuPDF. |
-| 2 | KANNAM DHANUSH KUMAR | Project Lead – Overall project development, system integration, backend implementation, and deployment. |
+| 1 | KANNAM DHANUSH KUMAR | Project Lead – Overall project development, system integration, backend implementation, and deployment. |
+| 2 | LEBAKA ADINARAYANA ACHARI | PDF Processing – PDF upload, text extraction, and document handling using PyMuPDF. |
 | 3 | K VIJAYA RAZ | Semantic Search – Text chunking, embedding generation, and FAISS-based document retrieval. |
 | 4 | SHAIK SAMEER AHMAD | AI Integration – AI model integration, contextual answer generation, and fallback mechanisms. |
 | 5 | CHAVVA ANIL KUMAR REDDY | Frontend & Testing – Streamlit interface development, application testing, and documentation. |
